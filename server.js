@@ -1,5 +1,5 @@
 import http from 'node:http';
-import {readFileSync,writeFileSync,renameSync,mkdirSync} from 'node:fs';
+import {readFileSync} from 'node:fs';
 import {randomBytes} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {join,dirname} from 'node:path';
@@ -7,10 +7,12 @@ import {match,moods,exclusions,dishes,directions} from './meals.js';
 import {analyzeAvoidance} from './public/preferences.js';
 import {validateRecipe} from './custom-recipes.js';
 import {conflict,publicGame,playGame} from './game.js';
+import {openStore} from './store.js';
 const root=dirname(fileURLToPath(import.meta.url));
-const data=process.env.DATA_DIR||join(root,'data');mkdirSync(data,{recursive:true});
-let pairs={};try{pairs=JSON.parse(readFileSync(join(data,'pairs.json'),'utf8'));}catch(e){if(e.code!=='ENOENT')throw e;}
-const save=()=>{writeFileSync(join(data,'pairs.tmp'),JSON.stringify(pairs));renameSync(join(data,'pairs.tmp'),join(data,'pairs.json'));};
+const store=openStore(root);
+const pairs=await store.load();
+let writing=Promise.resolve();
+const save=()=>{const snapshot=JSON.parse(JSON.stringify(pairs));const job=writing.then(()=>store.save(snapshot));writing=job.catch(()=>{});return job;};
 const token=()=>randomBytes(24).toString('hex');
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
 function clearVotes(pair){pair.finalists=[];pair.decision=null;pair.game=null;pair.people.forEach(p=>{p.vote=null;p.finalVote=null;});}
@@ -46,7 +48,7 @@ const server=http.createServer(async(req,res)=>{
  const name=typeof b.name==='string'?b.name.trim().slice(0,30):'';if(!name)fail('Wpisz swoje imię.');let pair;
  if(url.pathname==='/api/create'){let code;do{code=randomBytes(3).toString('hex').toUpperCase();}while(pairs[code]);pair=pairs[code]={code,people:[],skipped:[],round:1,recipes:[],browse:'all',finalists:[],game:null,decision:null};}
  else{pair=pairs[String(b.code).trim().toUpperCase()];if(!pair)fail('Nie znaleziono pary z tym kodem.',404);if(pair.people.length>=2)fail('Ta para ma już dwie osoby.',409);}
- const person={id:token().slice(0,12),token:token(),name,preferences:null,vote:null,finalVote:null,dislikes:''};pair.people.push(person);save();send(200,{token:person.token,...view(pair,person)});return;
+ const person={id:token().slice(0,12),token:token(),name,preferences:null,vote:null,finalVote:null,dislikes:''};pair.people.push(person);await save();send(200,{token:person.token,...view(pair,person)});return;
  }
  const auth=req.headers.authorization?.replace(/^Bearer /,'');let pair,me;
  for(const p of Object.values(pairs)){const found=p.people.find(x=>x.token===auth);if(found){pair=p;me=found;break;}}
@@ -97,7 +99,7 @@ const server=http.createServer(async(req,res)=>{
  }else if(url.pathname==='/api/reset'){
  pair.round++;pair.skipped=[];pair.browse='all';clearVotes(pair);pair.people.forEach(p=>p.preferences=null);
  }else fail('Nie znaleziono.',404);
- save();send(200,view(pair,me));
+ await save();send(200,view(pair,me));
  }catch(e){send(e.status||500,{error:e.status?e.message:'Nie udało się zapisać. Spróbuj ponownie.'});}
 });
 server.listen(Number(process.env.PORT||3000),process.env.HOST||'0.0.0.0',()=>console.log(`cojemy: http://localhost:${process.env.PORT||3000}`));

@@ -46,7 +46,16 @@ Na dwóch telefonach w tej samej sieci Wi-Fi co komputer otwórz `http://ADRES_I
 
 To lokalne MVP, bez publicznego hostingu. Logika gry obsługuje oddzielne urządzenia i asynchroniczne wybory; dostęp z różnych sieci wymaga udostępnienia wspólnego serwera w internecie. Przed publicznym udostępnieniem potrzebne są HTTPS, ograniczanie prób, odzyskiwanie dostępu i usuwanie par.
 
-Node.js + HTML/CSS/JavaScript, bez zależności i z jednym procesem. Synchronizacja co 2 sekundy. Atomowy zapis stanu w `data/pairs.json` obsługuje jeden proces serwera. Przeglądarka przechowuje token uczestnika — wracaj w tej samej przeglądarce; wyczyszczenie jej danych traci dostęp. „Wyjdź” odłącza urządzenie i nie zwalnia miejsca w parze. Nie udostępniaj pliku danych. Fonty Google są opcjonalne; są lokalne zamienniki.
+Node.js + HTML/CSS/JavaScript, bez zależności i z jednym procesem. Synchronizacja co 2 sekundy. Każda osoba ma osobny zapis: preferencje, pierwszy wybór i finalny wybór. Wspólne zostają kod pary, runda, gra i własne przepisy. Przy `SUPABASE_URL` i `SUPABASE_SECRET_KEY` serwer zapisuje to w Supabase. Bez nich zapis jest atomowy w `data/pairs.json`. Testy ustawiają `DATA_DIR` i zawsze używają pliku. Przeglądarka przechowuje token uczestnika i nie łączy się z bazą — gesty zostają na serwerze, dopóki obie osoby nie wybiorą. Wracaj w tej samej przeglądarce; wyczyszczenie jej danych traci dostęp. „Wyjdź” odłącza urządzenie i nie zwalnia miejsca w parze. Nie udostępniaj pliku danych ani klucza service role. Fonty Google są opcjonalne; są lokalne zamienniki.
+
+Plik `.env` w folderze aplikacji (nie commituj go):
+
+```sh
+SUPABASE_URL=https://PROJEKT.supabase.co
+SUPABASE_SECRET_KEY=klucz_service_role
+```
+
+`SUPABASE_SECRET_KEY` to secret key z ustawień API projektu, nie klucz publishable. W SQL Editorze uruchom `supabase/migrations/20261014153000_pair_choices.sql`, potem `npm start`.
 
 ## Testy
 
@@ -58,13 +67,8 @@ npm test
 
 ## Stały adres internetowy — kolejny etap
 
-Proponowana konfiguracja: prywatne repozytorium GitHub, hosting Vercel Hobby i baza PostgreSQL Neon Free. Aktualna aplikacja nadal zapisuje dane do JSON i NIE jest gotowa do trwałego działania na Vercel.
+Baza to Supabase. Serwer Node nadal musi działać — aplikacja nie jest jeszcze funkcją Vercel. Dwa telefony z różnych sieci potrzebują wspólnego, publicznego adresu tego serwera.
 
-1. Utwórz konta GitHub, Vercel i Neon w bezpłatnych planach.
-2. Utwórz prywatne repozytorium `cojemy` i dodaj zawartość tego folderu. Nie dodawaj `data/`, tokenów, `.env` ani hasła bazy.
-3. Utwórz bazę w Neon. Zachowaj adres połączenia jako sekret.
-4. Przed wdrożeniem: przenieś zapis do PostgreSQL, zabezpiecz równoczesne wybory transakcjami, dostosuj backend do funkcji Vercel, dodaj ograniczenie prób dołączenia oraz ogranicz odpytywanie nieaktywnej karty. Przetestuj dwie sesje i trwałość danych.
-5. Zaimportuj repozytorium w Vercel. Po przygotowaniu backendu dodaj sekret `DATABASE_URL` w ustawieniach projektu. Wdróż i otwórz otrzymany adres HTTPS `*.vercel.app`.
-6. Sprawdź tworzenie pary i wspólną decyzję na dwóch telefonach w różnych sieciach. Sprawdź zachowanie danych po ponownym wdrożeniu, limity użycia i wykonaj prywatną kopię bazy.
-
-Hobby służy do użytku osobistego i niekomercyjnego. Darmowe plany mają limity; nie wymagają kupowania własnej domeny. Instrukcja opisuje następny etap, nie gotowe wdrożenie.
+1. Uruchom migrację i uzupełnij `.env`, jak wyżej. Nie dodawaj `data/`, tokenów ani `.env` do repozytorium.
+2. Przed publicznym adresem: ogranicz próby dołączenia, ogranicz odpytywanie nieaktywnej karty i trzymaj jeden proces albo przenieś stan wyłącznie do bazy bez pamięci procesu.
+3. Sprawdź tworzenie pary i wspólną decyzję na dwóch telefonach. Po restarcie serwera wybory obu osób mają zostać w Supabase.
