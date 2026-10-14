@@ -13,6 +13,19 @@ const store=openStore(root);
 const pairs=await store.load();
 let writing=Promise.resolve();
 const save=()=>{const snapshot=JSON.parse(JSON.stringify(pairs));const job=writing.then(()=>store.save(snapshot));writing=job.catch(()=>{});return job;};
+function normalize(){
+ for(const pair of Object.values(pairs)){
+  pair.finalists||=[];pair.recipes||=[];pair.browse||='all';pair.game||=null;pair.decision||=null;
+  for(const person of pair.people){person.finalVote||=null;if(person.preferences){const pref=person.preferences;pref.exclude||=[];pref.methods||=['cook','other','order'];pref.dishes||=[];pref.directions||=[];pref.dislikes||='';pref.dislikes=[...new Set([...pref.dislikes.split(/[,;\n]/).map(s=>s.trim()).filter(Boolean),...pref.exclude.filter(x=>x!=='mięso')])].join(', ');pref.exclude=[];pref.avoidance=analyzeAvoidance(pref.dislikes);person.dislikes=pref.dislikes;}}
+  if(ready(pair)){const ids=options(pair).map(m=>m.id);if(pair.people.some(p=>p.vote&&!ids.includes(p.vote)))clearVotes(pair);}
+ }
+}
+async function reload(){
+ const next=await store.load();
+ for(const key of Object.keys(pairs))if(!(key in next))delete pairs[key];
+ Object.assign(pairs,next);
+ normalize();
+}
 const token=()=>randomBytes(24).toString('hex');
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
 function clearVotes(pair){pair.finalists=[];pair.decision=null;pair.game=null;pair.people.forEach(p=>{p.vote=null;p.finalVote=null;});}
@@ -20,11 +33,7 @@ function ready(pair){return pair.people.length===2&&pair.people.every(p=>p.prefe
 function options(pair){return match(pair.people.map(p=>p.preferences),pair.skipped,pair.recipes||[],pair.browse||'all');}
 function decision(pair){if(pair.decision)return pair.decision;if(pair.people.length!==2)return null;const [a,b]=pair.people;if(pair.finalists.length){return a.finalVote&&a.finalVote===b.finalVote?{mealId:a.finalVote,reason:'agreement'}:null;}return a.vote&&a.vote===b.vote?{mealId:a.vote,reason:'agreement'}:null;}
 function view(pair,me){return {code:pair.code,me:me.id,people:pair.people.map(({token,...p})=>p),matches:ready(pair)?options(pair):[],ready:ready(pair),skipped:pair.skipped.length,round:pair.round,finalists:pair.finalists,browse:pair.browse,recipes:pair.recipes,decision:decision(pair),conflict:conflict(pair),game:publicGame(pair,me)};}
-for(const pair of Object.values(pairs)){
- pair.finalists||=[];pair.recipes||=[];pair.browse||='all';pair.game||=null;pair.decision||=null;
- for(const person of pair.people){person.finalVote||=null;if(person.preferences){const pref=person.preferences;pref.exclude||=[];pref.methods||=['cook','other','order'];pref.dishes||=[];pref.directions||=[];pref.dislikes||='';pref.dislikes=[...new Set([...pref.dislikes.split(/[,;\n]/).map(s=>s.trim()).filter(Boolean),...pref.exclude.filter(x=>x!=='mięso')])].join(', ');pref.exclude=[];pref.avoidance=analyzeAvoidance(pref.dislikes);person.dislikes=pref.dislikes;}}
- if(ready(pair)){const ids=options(pair).map(m=>m.id);if(pair.people.some(p=>p.vote&&!ids.includes(p.vote)))clearVotes(pair);}
-}
+normalize();
 function checkRound(pair,b){if(b.round!==pair.round)fail('Rozpoczął się nowy posiłek. Sprawdź aktualny widok.',409);}
 function openDecision(pair){if(decision(pair))fail('Decyzja jest już zapisana. Zacznij kolejny posiłek.',409);}
 function validatePreferences(b){
@@ -34,7 +43,9 @@ function validatePreferences(b){
  return {directions:[...new Set(b.directions||[])],moods:[...new Set(b.moods)],dishes:[...new Set(b.dishes||[])],exclude:[],methods:[...new Set(b.methods)],dislikes,avoidance:analyzeAvoidance(dislikes),energy:b.energy};
 }
 async function body(req){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>8192)fail('Za dużo danych.',413);}try{return JSON.parse(raw||'{}');}catch{fail('Nieprawidłowe dane.');}}
-const server=http.createServer(async(req,res)=>{
+let pending=Promise.resolve();
+const exclusive=fn=>{const run=pending.then(fn,fn);pending=run.then(()=>{},()=>{});return run;};
+const server=http.createServer((req,res)=>exclusive(async()=>{
  const send=(status,value)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(value));};
  try{
  const url=new URL(req.url,'http://localhost');
@@ -43,6 +54,7 @@ const server=http.createServer(async(req,res)=>{
  const file=files[url.pathname];if(!file){res.writeHead(404);res.end('Nie znaleziono');return;}
  res.writeHead(200,{'Content-Type':file[1]+'; charset=utf-8','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});res.end(readFileSync(join(root,file[0])));return;
  }
+ await reload();
  const b=req.method==='POST'?await body(req):{};
  if(req.method==='POST'&&['/api/create','/api/join'].includes(url.pathname)){
  const name=typeof b.name==='string'?b.name.trim().slice(0,30):'';if(!name)fail('Wpisz swoje imię.');let pair;
@@ -101,5 +113,6 @@ const server=http.createServer(async(req,res)=>{
  }else fail('Nie znaleziono.',404);
  await save();send(200,view(pair,me));
  }catch(e){send(e.status||500,{error:e.status?e.message:'Nie udało się zapisać. Spróbuj ponownie.'});}
-});
-server.listen(Number(process.env.PORT||3000),process.env.HOST||'0.0.0.0',()=>console.log(`cojemy: http://localhost:${process.env.PORT||3000}`));
+}));
+export default server;
+if(!process.env.VERCEL)server.listen(Number(process.env.PORT||3000),process.env.HOST||'0.0.0.0',()=>console.log(`cojemy: http://localhost:${process.env.PORT||3000}`));

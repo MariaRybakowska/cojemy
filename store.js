@@ -39,7 +39,12 @@ function supabaseStore(url,key){
 export function openStore(root){
  loadEnv(join(root,'.env'));
  const url=process.env.SUPABASE_URL,key=process.env.SUPABASE_SECRET_KEY;
- if(process.env.DATA_DIR||(!url&&!key))return fileStore(process.env.DATA_DIR||join(root,'data'));
+ if(process.env.DATA_DIR)return fileStore(process.env.DATA_DIR);
+ if(process.env.VERCEL){
+  if(!url||!key)throw new Error('Set SUPABASE_URL and SUPABASE_SECRET_KEY in the Vercel project environment variables. The .env file is not deployed.');
+  return supabaseStore(url,key);
+ }
+ if(!url&&!key)return fileStore(join(root,'data'));
  if(!url||!key)throw new Error('Ustaw SUPABASE_URL i SUPABASE_SECRET_KEY albo usuń obie.');
  return supabaseStore(url,key);
 }

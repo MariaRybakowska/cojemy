@@ -33,7 +33,7 @@ test('wszystkie kombinacje gry i ukrywanie pierwszego gestu',()=>{
 });
 test('dwie sesje: finalny konflikt, zgoda, tajne gesty, remis, zwycięstwo i poddanie',async()=>{
  const data=await mkdtemp(join(tmpdir(),'cojemy-game-'));let child,round=1;
- async function start(){child=spawn(process.execPath,['server.js'],{cwd:new URL('..',import.meta.url),env:{...process.env,PORT:'3120',HOST:'127.0.0.1',DATA_DIR:data},stdio:['ignore','pipe','pipe']});await new Promise((resolve,reject)=>{child.stdout.once('data',resolve);child.once('error',reject);child.once('exit',code=>reject(Error('Server exited '+code)));});}
+ async function start(){child=spawn(process.execPath,['server.js'],{cwd:new URL('..',import.meta.url),env:{...process.env,PORT:'3120',HOST:'127.0.0.1',DATA_DIR:data,VERCEL:''},stdio:['ignore','pipe','pipe']});await new Promise((resolve,reject)=>{child.stdout.once('data',resolve);child.once('error',reject);child.once('exit',code=>reject(Error('Server exited '+code)));});}
  async function stop(){const done=new Promise(resolve=>child.once('exit',resolve));child.kill();await done;}
  async function call(path,body,auth){const payload=body&&auth?{round,...body}:body;const res=await fetch('http://127.0.0.1:3120/api/'+path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(auth?{Authorization:'Bearer '+auth}:{})},...(body?{body:JSON.stringify(payload)}:{})});const data=await res.json();if(data.round)round=data.round;return {status:res.status,data};}
  let a,b;

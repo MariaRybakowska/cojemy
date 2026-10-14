@@ -67,8 +67,8 @@ npm test
 
 ## Stały adres internetowy — kolejny etap
 
-Baza to Supabase. Serwer Node nadal musi działać — aplikacja nie jest jeszcze funkcją Vercel. Dwa telefony z różnych sieci potrzebują wspólnego, publicznego adresu tego serwera.
+Baza to Supabase. Na Vercel plik `.env` nie jest wysyłany. W projekcie Vercel otwórz Settings → Environment Variables i dodaj `SUPABASE_URL` oraz `SUPABASE_SECRET_KEY` (te same wartości co w `.env`), potem wdróż ponownie. Każde żądanie czyta aktualny stan z Supabase, więc dwie osoby nie zależą od pamięci jednego procesu.
 
 1. Uruchom migrację i uzupełnij `.env`, jak wyżej. Nie dodawaj `data/`, tokenów ani `.env` do repozytorium.
-2. Przed publicznym adresem: ogranicz próby dołączenia, ogranicz odpytywanie nieaktywnej karty i trzymaj jeden proces albo przenieś stan wyłącznie do bazy bez pamięci procesu.
-3. Sprawdź tworzenie pary i wspólną decyzję na dwóch telefonach. Po restarcie serwera wybory obu osób mają zostać w Supabase.
+2. Przed publicznym adresem wyłącz Vercel Authentication w Deployment Protection, jeśli druga osoba ma otworzyć link bez konta Vercel. Ogranicz próby dołączenia i odpytywanie nieaktywnej karty.
+3. Sprawdź tworzenie pary i wspólną decyzję na dwóch telefonach. Po ponownym wdrożeniu wybory obu osób mają zostać w Supabase.
