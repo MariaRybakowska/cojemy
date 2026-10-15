@@ -26,7 +26,7 @@ export const orderMeals = [
  {id:'order-sushi',name:'Sushi z warzywami',description:'Ogórek, awokado i ryż, bez ryb.',tags:['świeże','lekkie','łagodne'],contains:[],ingredients:['ryż','ogórek','awokado','nori'],kind:'order'}
 ].map(m=>({...m,directions:m.id.includes('pizza')?['coś znajomego','do dzielenia']:m.id.includes('burger')?['coś znajomego','mało składników']:m.id.includes('falafel')||m.id.includes('sushi')?['coś innego','do dzielenia','do podjadania']:['coś innego','jedna miska','mało składników'],groups:m.id.includes('pizza')?['pizza']:m.id.includes('burger')?['burger']:m.id.includes('falafel')?['coś do podjadania']:['ryż'],cuisines:m.id.includes('pizza')?['kuchnia włoska','kuchnia śródziemnomorska']:m.id.includes('falafel')?['kuchnia bliskowschodnia','kuchnia śródziemnomorska']:m.id.includes('sushi')?['kuchnia japońska','kuchnia azjatycka']:m.id.includes('curry')?['kuchnia indyjska','kuchnia azjatycka']:[]}));
 export function dislikeTerms(text=''){return analyzeAvoidance(text).map(t=>t.key);}
-export function match(preferences, skipped=[], custom=[], kind='all') {
+export function match(preferences, skipped=[], custom=[], kind='all', limit=3) {
  const terms=preferences.flatMap(p=>analyzeAvoidance(p.dislikes||''));
  const banned=new Set([...preferences.flatMap(p=>p.exclude||[]),...terms.filter(t=>t.type==='category').map(t=>t.label)]);
  const acceptsCook=preferences.every(p=>(p.methods||['cook']).some(x=>x==='cook'||x==='other'));
@@ -37,5 +37,6 @@ export function match(preferences, skipped=[], custom=[], kind='all') {
  const pool=[...(acceptsCook&&willing.length?[...custom,...meals]:[]),...(canOrder?orderMeals:[]),...(canOut?orderMeals.map(m=>({...m,id:m.id.replace('order-','out-'),kind:'out'})):[])];
  return pool.filter(m=>(kind==='all'||m.kind===kind)&&(m.kind!=='cook'||m.energy<=energy)&&!m.contains.some(x=>banned.has(x))&&!skipped.includes(m.id)&&!blocksRecipe(m,terms))
  .map(m=>{const hits=preferences.map(p=>({tastes:(p.moods||[]).filter(t=>m.tags.includes(t)),dishes:(p.dishes||[]).filter(t=>baseGroups(m.ingredients,m.groups||[]).includes(t))}));const scores=hits.map(h=>h.tastes.length+h.dishes.length*3);return {...m,matchesFor:hits,score:Math.min(...scores)*3+scores.reduce((a,b)=>a+b,0)+(m.custom?20:0)};})
- .sort((a,b)=>b.score-a.score || (a.kind===b.kind?0:a.kind==='cook'?-1:b.kind==='cook'?1:a.kind.localeCompare(b.kind)) || (a.minutes||0)-(b.minutes||0)).slice(0,3);
+ .sort((a,b)=>b.score-a.score || (a.kind===b.kind?0:a.kind==='cook'?-1:b.kind==='cook'?1:a.kind.localeCompare(b.kind)) || (a.minutes||0)-(b.minutes||0)).slice(0,limit);
 }
+export function mealById(preferences, custom, id){return match(preferences,[],custom,'all',500).find(m=>m.id===id)||null;}

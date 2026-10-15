@@ -37,11 +37,10 @@ test('dwie sesje: finalny konflikt, zgoda, tajne gesty, remis, zwycięstwo i pod
  async function stop(){const done=new Promise(resolve=>child.once('exit',resolve));child.kill();await done;}
  async function call(path,body,auth){const payload=body&&auth?{round,...body}:body;const res=await fetch('http://127.0.0.1:3120/api/'+path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(auth?{Authorization:'Bearer '+auth}:{})},...(body?{body:JSON.stringify(payload)}:{})});const data=await res.json();if(data.round)round=data.round;return {status:res.status,data};}
  let a,b;
- async function makeConflict(reverse=false){await call('preferences',pref(),a.token);const state=(await call('preferences',pref(),b.token)).data;const [first,second]=state.matches;await call('vote',{id:first.id},a.token);await call('vote',{id:second.id},b.token);const half=(await call('finalize',{id:reverse?second.id:first.id},a.token)).data;assert.equal(half.decision,null);assert.equal(half.conflict,false);const full=(await call('finalize',{id:reverse?first.id:second.id},b.token)).data;assert.equal(full.conflict,true);assert.equal(full.decision,null);return [first.id,second.id];}
+ async function makeConflict(reverse=false){await call('preferences',pref(),a.token);const state=(await call('preferences',pref(),b.token)).data;const [first,second]=state.matches;await call('vote',{id:reverse?second.id:first.id},a.token);const full=(await call('vote',{id:reverse?first.id:second.id},b.token)).data;assert.equal(full.conflict,true);assert.equal(full.decision,null);return [first.id,second.id];}
  try{
  await start();a=(await call('create',{name:'A'})).data;b=(await call('join',{name:'B',code:a.code})).data;
  let [first,second]=await makeConflict();
- assert.equal((await call('finalize',{id:second},a.token)).status,409);
  const request=(await call('game/request',{},a.token)).data;let g=request.game;
  assert.equal(g.consents.length,1);assert.equal((await call('game/move',{gameId:g.id,turn:1,move:'rock'},a.token)).status,409);
  await call('game/request',{gameId:g.id},b.token);const firstMove=(await call('game/move',{gameId:g.id,turn:1,move:'rock'},a.token)).data;assert.equal(firstMove.game.myMove,'rock');

@@ -18,11 +18,11 @@ Otwórz http://localhost:3000. Zatrzymanie: Ctrl+C. Inny port: `PORT=3001 npm st
 2. W oknie prywatnym lub innej przeglądarce otwórz ten sam adres i dołącz kodem jako druga osoba.
 3. Osobno zaznaczcie chipsy: bazę posiłku (np. makaron, ryż, warzywa, coś białkowego), smaki i sposób jedzenia. W jednym polu wpiszcie wykluczenia: składniki, dania lub kuchnie. Wykluczenia zapamiętują się na kolejne posiłki.
 4. Aplikacja pokazuje maksymalnie 3 propozycje. Wykluczenia są twardymi ograniczeniami; pozytywne zachcianki zwiększają wynik. Przy małej kolekcji może pokazać alternatywę do zaznaczonej zachcianki. Jedna chętna osoba może gotować dla obojga. Zamówienie lub wyjście musi pasować obojgu.
-5. Każde wybiera danie. Zgodny pierwszy wybór zapisuje decyzję. Różne wybory otwierają dwie karty do finalnego potwierdzenia. Imiona i aktualne finalne wybory są widoczne, a komunikat wyjaśnia, na kogo czekamy.
-6. Przy dwóch różnych finalnych wyborach są dwie opcje: „Poddaję się — wybór drugiej osoby jest OK” albo „Rozstrzygnijmy grą”. Poddanie się akceptuje FINALNY wybór drugiej osoby, również jeśli zmieniła swoją pierwszą propozycję.
+5. Każde wybiera danie. Od razu widać „Wybierasz: …” i na kogo czekamy. Zgodny wybór zapisuje decyzję.
+6. Różne wybory pokazują od razu dwa dania z imionami. Można zostać przy swoim, nacisnąć „Wybieram też to” (to kończy decyzję daniem drugiej osoby) albo zaproponować grę.
 7. Nowy posiłek resetuje głosy i grę, zachowując wykluczenia i własne linki.
 
-„Nic nie pasuje?” przed finalnym rozstrzygnięciem oferuje inne przepisy, własny link, zamówienie i wyjście. Odrzucenie karty, zmiana kategorii lub preferencji czy dodanie linku rozpoczyna wybieranie od nowa dla obu osób. Potwierdzonej decyzji nie zmieniają przyciski z poprzedniego etapu.
+„Nic nie pasuje?” oferuje inne przepisy, własny link, zamówienie, wyjście i zmianę wykluczeń. Odrzucenie karty, prośba o inne propozycje, zmiana preferencji i dodanie przepisu zaczynają wybieranie od nowa dla obu osób i mówią o tym wprost. Sama zmiana zakładki (wszystko, przepisy, zamówienie, na mieście) wyborów nie kasuje. Potwierdzonej decyzji nie zmieniają przyciski z poprzedniego etapu.
 
 ## Jedno pole wykluczeń
 
@@ -32,7 +32,7 @@ Przepisy mają oznaczenia rodzaju dania i kuchni. Szersze kategorie, np. śródz
 
 ## Kamień, papier, nożyce
 
-Gra jest opcjonalna. Osoba proponująca ją akceptuje oba dania, a druga osoba musi osobno się zgodzić. Gracie o swoje FINALNE wybory. Gesty są zapisywane przez serwer i nie można ich zmienić. Każda osoba widzi tylko własny gest, dopóki obie nie wybiorą. Dopiero wtedy serwer odsłania ruchy i oblicza wynik. Remis nie wybiera dania — można rozegrać kolejną rundę. Zwycięstwo zapisuje danie przypisane do zwycięzcy. Poddanie się jest możliwe również podczas oczekiwania na gest. Restart serwera zachowuje trwającą grę oraz wynik. Żądania z poprzedniej rundy gry są odrzucane; spóźnione kliknięcie nie zmienia rozstrzygniętej decyzji.
+Gra jest opcjonalna. Widać, kto ją proponuje i o które dwa dania. Druga osoba musi osobno się zgodzić. Gracie o swoje aktualne wybory. Gesty są zapisywane przez serwer i nie można ich zmienić. Każda osoba od razu widzi własny gest i na kogo czeka; cudzy gest zostaje ukryty, dopóki obie nie wybiorą. Dopiero wtedy serwer odsłania ruchy i oblicza wynik. Remis nie wybiera dania — można rozegrać kolejną rundę. Zwycięstwo zapisuje danie przypisane do zwycięzcy. „Wybieram też to” jest możliwe również podczas oczekiwania na gest i akceptuje aktualne danie drugiej osoby. Restart serwera zachowuje trwającą grę oraz wynik. Żądania z poprzedniej rundy gry są odrzucane; spóźnione kliknięcie nie zmienia rozstrzygniętej decyzji.
 
 ## Przepisy i własne linki
 

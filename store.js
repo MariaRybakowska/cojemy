@@ -27,7 +27,7 @@ function supabaseStore(url,key){
  async function call(name,body){
   let response;try{response=await fetch(endpoint+name,{method:'POST',headers,body:JSON.stringify(body)});}
   catch(e){console.error('supabase',name,e.message);throw new Error('Nie udało się połączyć z bazą.');}
-  if(!response.ok){console.error('supabase',name,response.status,await response.text());throw new Error('Nie udało się zapisać w bazie.');}
+  if(!response.ok){const detail=await response.text();console.error('supabase',name,response.status,detail);if(detail.includes('stale pair'))throw Object.assign(new Error('Stan się zmienił. Sprawdź aktualny widok.'),{status:409});throw new Error('Nie udało się zapisać w bazie.');}
   if(response.status===204)return null;return response.json();
  }
  return {

@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 import {randomBytes} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {join,dirname} from 'node:path';
-import {match,moods,exclusions,dishes,directions} from './meals.js';
+import {match,mealById,moods,exclusions,dishes,directions} from './meals.js';
 import {analyzeAvoidance} from './public/preferences.js';
 import {validateRecipe} from './custom-recipes.js';
 import {conflict,publicGame,playGame} from './game.js';
@@ -11,29 +11,40 @@ import {openStore} from './store.js';
 const root=dirname(fileURLToPath(import.meta.url));
 const store=openStore(root);
 const pairs=await store.load();
-let writing=Promise.resolve();
-const save=()=>{const snapshot=JSON.parse(JSON.stringify(pairs));const job=writing.then(()=>store.save(snapshot));writing=job.catch(()=>{});return job;};
+let loadedVersions={},writing=Promise.resolve();
+function remember(){loadedVersions=Object.fromEntries(Object.entries(pairs).map(([code,pair])=>[code,pair.version||0]));}
+const save=async()=>{
+ const current=await store.load();
+ for(const pair of Object.values(pairs)){
+  const base=loadedVersions[pair.code]??0;
+  if(current[pair.code]&&(current[pair.code].version||0)!==base)throw Object.assign(new Error('Stan się zmienił. Sprawdź aktualny widok.'),{status:409});
+  pair.baseVersion=base;pair.version=base+1;
+ }
+ const snapshot=JSON.parse(JSON.stringify(pairs));
+ const job=writing.then(()=>store.save(snapshot));writing=job.catch(()=>{});return job;
+};
 function normalize(){
  for(const pair of Object.values(pairs)){
-  pair.finalists||=[];pair.recipes||=[];pair.browse||='all';pair.game||=null;pair.decision||=null;
+  pair.finalists||=[];pair.recipes||=[];pair.browse||='all';pair.game||=null;pair.decision||=null;pair.version||=0;pair.notice||=null;
   for(const person of pair.people){person.finalVote||=null;if(person.preferences){const pref=person.preferences;pref.exclude||=[];pref.methods||=['cook','other','order'];pref.dishes||=[];pref.directions||=[];pref.dislikes||='';pref.dislikes=[...new Set([...pref.dislikes.split(/[,;\n]/).map(s=>s.trim()).filter(Boolean),...pref.exclude.filter(x=>x!=='mięso')])].join(', ');pref.exclude=[];pref.avoidance=analyzeAvoidance(pref.dislikes);person.dislikes=pref.dislikes;}}
-  if(ready(pair)){const ids=options(pair).map(m=>m.id);if(pair.people.some(p=>p.vote&&!ids.includes(p.vote)))clearVotes(pair);}
  }
 }
 async function reload(){
  const next=await store.load();
  for(const key of Object.keys(pairs))if(!(key in next))delete pairs[key];
  Object.assign(pairs,next);
- normalize();
+ normalize();remember();
 }
 const token=()=>randomBytes(24).toString('hex');
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
 function clearVotes(pair){pair.finalists=[];pair.decision=null;pair.game=null;pair.people.forEach(p=>{p.vote=null;p.finalVote=null;});}
+function restart(pair,person,text){clearVotes(pair);pair.notice={text,by:person?.id||null};}
 function ready(pair){return pair.people.length===2&&pair.people.every(p=>p.preferences);}
 function options(pair){return match(pair.people.map(p=>p.preferences),pair.skipped,pair.recipes||[],pair.browse||'all');}
-function decision(pair){if(pair.decision)return pair.decision;if(pair.people.length!==2)return null;const [a,b]=pair.people;if(pair.finalists.length){return a.finalVote&&a.finalVote===b.finalVote?{mealId:a.finalVote,reason:'agreement'}:null;}return a.vote&&a.vote===b.vote?{mealId:a.vote,reason:'agreement'}:null;}
-function view(pair,me){return {code:pair.code,me:me.id,people:pair.people.map(({token,...p})=>p),matches:ready(pair)?options(pair):[],ready:ready(pair),skipped:pair.skipped.length,round:pair.round,finalists:pair.finalists,browse:pair.browse,recipes:pair.recipes,decision:decision(pair),conflict:conflict(pair),game:publicGame(pair,me)};}
-normalize();
+function decision(pair){if(pair.decision)return pair.decision;if(pair.people.length!==2)return null;const [a,b]=pair.people;return a.vote&&a.vote===b.vote?{mealId:a.vote,reason:'agreement'}:null;}
+function pickedMeals(pair){if(!ready(pair))return [];const prefs=pair.people.map(p=>p.preferences);const ids=[...pair.people.map(p=>p.vote),pair.decision?.mealId,...Object.values(pair.game?.choices||{})].filter(Boolean);return [...new Set(ids)].map(id=>mealById(prefs,pair.recipes||[],id)).filter(Boolean);}
+function view(pair,me){return {code:pair.code,me:me.id,people:pair.people.map(({token,...p})=>p),matches:ready(pair)?options(pair):[],picked:pickedMeals(pair),ready:ready(pair),skipped:pair.skipped.length,round:pair.round,browse:pair.browse,recipes:pair.recipes,notice:pair.notice,decision:decision(pair),conflict:conflict(pair),game:publicGame(pair,me)};}
+normalize();remember();
 function checkRound(pair,b){if(b.round!==pair.round)fail('Rozpoczął się nowy posiłek. Sprawdź aktualny widok.',409);}
 function openDecision(pair){if(decision(pair))fail('Decyzja jest już zapisana. Zacznij kolejny posiłek.',409);}
 function validatePreferences(b){
@@ -58,7 +69,7 @@ const server=http.createServer((req,res)=>exclusive(async()=>{
  const b=req.method==='POST'?await body(req):{};
  if(req.method==='POST'&&['/api/create','/api/join'].includes(url.pathname)){
  const name=typeof b.name==='string'?b.name.trim().slice(0,30):'';if(!name)fail('Wpisz swoje imię.');let pair;
- if(url.pathname==='/api/create'){let code;do{code=randomBytes(3).toString('hex').toUpperCase();}while(pairs[code]);pair=pairs[code]={code,people:[],skipped:[],round:1,recipes:[],browse:'all',finalists:[],game:null,decision:null};}
+ if(url.pathname==='/api/create'){let code;do{code=randomBytes(3).toString('hex').toUpperCase();}while(pairs[code]);pair=pairs[code]={code,people:[],skipped:[],round:1,recipes:[],browse:'all',finalists:[],game:null,decision:null,notice:null,version:0};}
  else{pair=pairs[String(b.code).trim().toUpperCase()];if(!pair)fail('Nie znaleziono pary z tym kodem.',404);if(pair.people.length>=2)fail('Ta para ma już dwie osoby.',409);}
  const person={id:token().slice(0,12),token:token(),name,preferences:null,vote:null,finalVote:null,dislikes:''};pair.people.push(person);await save();send(200,{token:person.token,...view(pair,person)});return;
  }
@@ -69,37 +80,32 @@ const server=http.createServer((req,res)=>exclusive(async()=>{
  if(req.method!=='POST')fail('Nie znaleziono.',404);
  checkRound(pair,b);
  if(url.pathname==='/api/preferences'){
- openDecision(pair);me.preferences=validatePreferences(b);me.dislikes=me.preferences.dislikes;pair.browse='all';pair.skipped=[];clearVotes(pair);
+ openDecision(pair);me.preferences=validatePreferences(b);me.dislikes=me.preferences.dislikes;pair.browse='all';pair.skipped=[];restart(pair,me,me.name+' zmienia preferencje. Propozycje są nowe — wybierzcie ponownie.');
  }else if(['/api/more','/api/browse','/api/recipe'].includes(url.pathname)){
  openDecision(pair);
  if(url.pathname==='/api/recipe'){
  const recipe=validateRecipe(b);if(pair.recipes.length>=50)fail('Kolekcja ma już 50 przepisów.');
  if(pair.recipes.some(r=>r.url===recipe.url))fail('Ten link jest już w Waszej kolekcji.',409);
- pair.recipes.unshift({...recipe,id:'custom-'+token().slice(0,16),addedBy:me.id});pair.browse='cook';
+ pair.recipes.unshift({...recipe,id:'custom-'+token().slice(0,16),addedBy:me.id});pair.browse='cook';restart(pair,me,me.name+' dodaje przepis. Wybieracie od nowa.');
  }else{
  if(!['all','cook','order','out'].includes(b.kind))fail('Wybierz sposób jedzenia.');
  if(!ready(pair))fail('Najpierw zapiszcie preferencje.');
- if(url.pathname==='/api/more')pair.skipped=[...new Set([...pair.skipped,...options(pair).map(m=>m.id)])];
- pair.browse=b.kind;
- }clearVotes(pair);
- }else if(['/api/vote','/api/skip','/api/finalize'].includes(url.pathname)){
+ if(url.pathname==='/api/more'){pair.skipped=[...new Set([...pair.skipped,...options(pair).map(m=>m.id)])];pair.browse=b.kind;restart(pair,me,me.name+' prosi o inne propozycje. Wybieracie od nowa.');}
+ else pair.browse=b.kind;
+ }
+ }else if(['/api/vote','/api/skip'].includes(url.pathname)){
  openDecision(pair);if(!ready(pair))fail('Czekamy na preferencje obu osób.');
  if(!options(pair).some(m=>m.id===b.id))fail('Propozycje się zmieniły. Sprawdź aktualny widok.',409);
- if(url.pathname==='/api/finalize'){
- if(!pair.finalists.includes(b.id))fail('Wybierz jedno z Waszych dwóch dań.',409);
+ if(url.pathname==='/api/vote'){
  if(pair.game)fail('Trwa rozstrzyganie grą. Najpierw zakończcie lub anulujcie grę.',409);
- if(conflict(pair))fail('Wybory są różne. Możesz zaakceptować wybór drugiej osoby lub zagrać.',409);
- me.finalVote=b.id;
- }else if(url.pathname==='/api/vote'){
- if(pair.finalists.length)fail('Przejdź do finalnej decyzji.',409);me.vote=b.id;
- if(pair.people.every(p=>p.vote)&&pair.people[0].vote!==pair.people[1].vote){pair.finalists=pair.people.map(p=>p.vote);pair.people.forEach(p=>p.finalVote=null);}
- }else{pair.skipped.push(b.id);clearVotes(pair);}
+ me.vote=b.id;pair.notice=null;if(decision(pair))pair.decision=decision(pair);
+ }else{pair.skipped.push(b.id);restart(pair,me,me.name+' odrzuca propozycję. Wybieracie od nowa.');}
  }else if(url.pathname==='/api/yield'){
- openDecision(pair);if(!conflict(pair))fail('Nie ma dwóch różnych finalnych wyborów.',409);
- const partner=pair.people.find(p=>p.id!==me.id);pair.decision={mealId:partner.finalVote,reason:'yield',acceptedBy:me.id};pair.game=null;
+ openDecision(pair);if(!conflict(pair))fail('Nie ma dwóch różnych wyborów.',409);
+ const partner=pair.people.find(p=>p.id!==me.id);pair.decision={mealId:partner.vote,reason:'yield',acceptedBy:me.id};pair.game=null;pair.notice=null;
  }else if(url.pathname==='/api/game/request'){
- openDecision(pair);if(!conflict(pair))fail('Gramy dopiero przy dwóch różnych finalnych wyborach.',409);
- if(!pair.game){pair.game={id:token().slice(0,16),turn:1,consents:[],moves:{},result:null,choices:Object.fromEntries(pair.people.map(p=>[p.id,p.finalVote]))};}
+ openDecision(pair);if(!conflict(pair))fail('Gramy dopiero przy dwóch różnych wyborach.',409);
+ if(!pair.game){pair.game={id:token().slice(0,16),turn:1,consents:[],moves:{},result:null,choices:Object.fromEntries(pair.people.map(p=>[p.id,p.vote]))};}
  else if(b.gameId!==pair.game.id)fail('Zaproszenie do gry już się zmieniło.',409);
  if(!pair.game.consents.includes(me.id))pair.game.consents.push(me.id);
  }else if(url.pathname==='/api/game/decline'){
@@ -109,7 +115,7 @@ const server=http.createServer((req,res)=>exclusive(async()=>{
  }else if(url.pathname==='/api/game/rematch'){
  openDecision(pair);const g=pair.game;if(!g||b.gameId!==g.id||b.turn!==g.turn||!g.result?.tie)fail('Nie ma remisu do rozegrania ponownie.',409);g.turn++;g.moves={};g.result=null;
  }else if(url.pathname==='/api/reset'){
- pair.round++;pair.skipped=[];pair.browse='all';clearVotes(pair);pair.people.forEach(p=>p.preferences=null);
+ pair.round++;pair.skipped=[];pair.browse='all';pair.notice=null;clearVotes(pair);pair.people.forEach(p=>p.preferences=null);
  }else fail('Nie znaleziono.',404);
  await save();send(200,view(pair,me));
  }catch(e){send(e.status||500,{error:e.status?e.message:'Nie udało się zapisać. Spróbuj ponownie.'});}

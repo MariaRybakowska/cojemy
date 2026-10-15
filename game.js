@@ -1,6 +1,6 @@
 export const gestures=['rock','paper','scissors'];
 export const beats={rock:'scissors',paper:'rock',scissors:'paper'};
-export function conflict(pair){return pair.finalists?.length===2&&pair.people.every(p=>p.finalVote)&&pair.people[0].finalVote!==pair.people[1].finalVote;}
+export function conflict(pair){return !pair.decision&&pair.people?.length===2&&pair.people.every(p=>p.vote)&&pair.people[0].vote!==pair.people[1].vote;}
 export function publicGame(pair,me){const g=pair.game;if(!g)return null;return {id:g.id,turn:g.turn,consents:g.consents,choices:g.choices,myMove:g.moves[me.id]||null,moved:pair.people.filter(p=>g.moves[p.id]).map(p=>p.id),result:g.result};}
 export function playGame(pair,me,input){const bad=message=>{throw Object.assign(new Error(message),{status:409});};const g=pair.game;
  if(!g||input.gameId!==g.id||input.turn!==g.turn)bad('Gra lub runda już się zmieniła. Sprawdź aktualny widok.');
